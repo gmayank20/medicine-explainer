@@ -44,7 +44,7 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
         }
 
         payload = {
-            "model": "llama3-8b-8192",
+            "model": "llama-3.1-8b-instant",
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user",   "content": prompt}
@@ -73,7 +73,7 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
                 medicine_name=medicine_name,
                 explanation=explanation,
                 was_cached=False,
-                model_used="groq-llama3-8b",
+                model_used="groq-llama-3.1-8b-instant",
                 safety_footer=SAFETY_FOOTER
             )
 
