@@ -1,12 +1,9 @@
 import os
-import requests
 from dataclasses import dataclass
 from app.config.prompts import SYSTEM_PROMPT, SAFETY_FOOTER, build_explanation_prompt
 from app.db.cache import get_cached_explanation, cache_explanation
 from app.core.llm_explainer import apply_safety_filter
 
-# Hugging Face Inference API
-HF_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3"
 HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
 
 
@@ -21,11 +18,10 @@ class ExplainerResult:
 
 def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResult:
     """
-    Query Hugging Face Inference API instead of local Ollama.
-    Used when deployed on Hugging Face Spaces.
-    Falls back gracefully if API is unavailable.
+    Query HF Inference using huggingface_hub InferenceClient.
+    Works inside HF Spaces without external network calls.
     """
-    # Check cache first — reduces API calls significantly
+    # Check cache first
     cached = get_cached_explanation(medicine_name)
     if cached:
         return ExplainerResult(
@@ -38,66 +34,45 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
 
     prompt = build_explanation_prompt(medicine_name, confidence)
 
-    # Format for Mistral instruct format
-    formatted_prompt = f"<s>[INST] {SYSTEM_PROMPT}\n\n{prompt} [/INST]"
-
-    headers = {
-        "Authorization": f"Bearer {HF_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "inputs": formatted_prompt,
-        "parameters": {
-            "max_new_tokens": 400,
-            "temperature": 0.1,
-            "do_sample": False,
-            "return_full_text": False
-        }
-    }
-
     try:
-        response = requests.post(
-            HF_API_URL,
-            headers=headers,
-            json=payload,
-            timeout=60
+        from huggingface_hub import InferenceClient
+
+        client = InferenceClient(
+            model="mistralai/Mistral-7B-Instruct-v0.3",
+            token=HF_API_TOKEN
         )
 
-        if response.status_code == 200:
-            result = response.json()
-            if isinstance(result, list) and result:
-                explanation = result[0].get('generated_text', '')
-                explanation = apply_safety_filter(explanation)
-                cache_explanation(
-                    medicine_name, explanation,
-                    "mistral-7b-instruct-hf"
-                )
-                return ExplainerResult(
-                    medicine_name=medicine_name,
-                    explanation=explanation,
-                    was_cached=False,
-                    model_used="mistral-7b-instruct-hf",
-                    safety_footer=SAFETY_FOOTER
-                )
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user",   "content": prompt}
+        ]
+
+        response = client.chat_completion(
+            messages=messages,
+            max_tokens=400,
+            temperature=0.1
+        )
+
+        explanation = response.choices[0].message.content
+        explanation = apply_safety_filter(explanation)
+
+        cache_explanation(
+            medicine_name, explanation,
+            "mistral-7b-instruct-hf"
+        )
 
         return ExplainerResult(
             medicine_name=medicine_name,
-            explanation=(
-                "The explanation service is temporarily unavailable. "
-                "Please try again in a moment or consult your pharmacist."
-            ),
+            explanation=explanation,
             was_cached=False,
-            model_used="error",
+            model_used="mistral-7b-instruct-hf",
             safety_footer=SAFETY_FOOTER
         )
 
     except Exception as e:
         return ExplainerResult(
             medicine_name=medicine_name,
-            explanation=(
-                f"Debug error for '{medicine_name}': {str(e)}"
-            ),
+            explanation=f"Debug error for '{medicine_name}': {str(e)}",
             was_cached=False,
             model_used="error",
             safety_footer=SAFETY_FOOTER
