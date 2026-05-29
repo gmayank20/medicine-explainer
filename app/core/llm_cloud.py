@@ -96,8 +96,7 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
         return ExplainerResult(
             medicine_name=medicine_name,
             explanation=(
-                f"Unable to retrieve information for '{medicine_name}'. "
-                f"Please consult your pharmacist directly."
+                f"Debug error for '{medicine_name}': {str(e)}"
             ),
             was_cached=False,
             model_used="error",
