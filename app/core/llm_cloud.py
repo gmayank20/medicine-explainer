@@ -38,7 +38,7 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
         from huggingface_hub import InferenceClient
 
         client = InferenceClient(
-            model="mistralai/Mistral-7B-Instruct-v0.3",
+            model="HuggingFaceH4/zephyr-7b-beta",
             token=HF_API_TOKEN,
             provider="hf-inference"
         )
