@@ -1,21 +1,11 @@
+import os
 from dataclasses import dataclass
 from typing import Optional, List
 
 from app.core.ocr_engine import OCRResult, extract_text_with_confidence
 from app.core.medicine_extractor import ExtractedMedicine, extract_medicines
-import os
 from app.core.llm_explainer import ExplainerResult, explain_medicine as _local_explain
 from app.core.llm_cloud import explain_medicine_cloud as _cloud_explain
-
-def explain_medicine(medicine_name: str, confidence: str):
-    """
-    Auto-detect environment and use correct LLM.
-    Local: Ollama (MacBook)
-    Cloud: HF Inference API (Hugging Face Spaces)
-    """
-    if os.getenv("HF_API_TOKEN", ""):
-        return _cloud_explain(medicine_name, confidence)
-    return _local_explain(medicine_name, confidence)
 from app.db.cache import log_query
 
 
@@ -31,6 +21,17 @@ class PipelineResult:
     medicines: List[MedicineResult]
     input_type: str            # "image" | "text"
     error: Optional[str] = None
+
+
+def explain_medicine(medicine_name: str, confidence: str):
+    """
+    Auto-detect environment and use correct LLM.
+    Local : Ollama (MacBook)
+    Cloud : Groq API (Hugging Face Spaces)
+    """
+    if os.getenv("GROQ_API_KEY", "") or os.getenv("GEMINI_API_KEY", ""):
+        return _cloud_explain(medicine_name, confidence)
+    return _local_explain(medicine_name, confidence)
 
 
 def run_pipeline(
@@ -67,8 +68,6 @@ def run_pipeline(
         )
 
         explanation = explain_medicine(explain_name, med.confidence)
-
-        explanation = explain_medicine(med.name, med.confidence)
 
         log_query(
             input_type="text",
@@ -114,7 +113,7 @@ def run_pipeline(
                       "Please type the medicine name manually."
             )
 
-    # Stage 3: Explain each medicine (cap at 5)
+        # Stage 3: Explain each medicine (cap at 5)
         from app.utils.indian_medicine_mapper import get_explain_name
         results = []
         for med in medicines[:5]:

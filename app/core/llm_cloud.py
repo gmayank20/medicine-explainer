@@ -1,14 +1,12 @@
 import os
+import requests
 from dataclasses import dataclass
 from app.config.prompts import SYSTEM_PROMPT, SAFETY_FOOTER, build_explanation_prompt
 from app.db.cache import get_cached_explanation, cache_explanation
 from app.core.llm_explainer import apply_safety_filter
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_API_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:generateContent"
-)
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
 
 @dataclass
@@ -22,11 +20,11 @@ class ExplainerResult:
 
 def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResult:
     """
-    Query Google Gemini API for medicine explanations.
-    Used when deployed on Hugging Face Spaces.
-    Free tier — no billing required.
+    Query Groq API for medicine explanations.
+    Free tier — fast, reliable, no billing required.
+    Model: llama3-8b-8192
     """
-    # Check cache first — reduces API calls
+    # Check cache first
     cached = get_cached_explanation(medicine_name)
     if cached:
         return ExplainerResult(
@@ -38,45 +36,44 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
         )
 
     prompt = build_explanation_prompt(medicine_name, confidence)
-    full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
 
     try:
-        import requests
-
-        url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
-
-        payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {"text": full_prompt}
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.1,
-                "maxOutputTokens": 400,
-            }
+        headers = {
+            "Authorization": f"Bearer {GROQ_API_KEY}",
+            "Content-Type": "application/json"
         }
 
-        response = requests.post(url, json=payload, timeout=30)
+        payload = {
+            "model": "llama3-8b-8192",
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user",   "content": prompt}
+            ],
+            "max_tokens": 400,
+            "temperature": 0.1
+        }
+
+        response = requests.post(
+            GROQ_API_URL,
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
 
         if response.status_code == 200:
             data = response.json()
-            explanation = (
-                data["candidates"][0]["content"]["parts"][0]["text"]
-            )
+            explanation = data["choices"][0]["message"]["content"]
             explanation = apply_safety_filter(explanation)
 
             cache_explanation(
-                medicine_name, explanation, "gemini-2.0-flash"
+                medicine_name, explanation, "groq-llama3-8b"
             )
 
             return ExplainerResult(
                 medicine_name=medicine_name,
                 explanation=explanation,
                 was_cached=False,
-                model_used="gemini-2.0-flash",
+                model_used="groq-llama3-8b",
                 safety_footer=SAFETY_FOOTER
             )
 
