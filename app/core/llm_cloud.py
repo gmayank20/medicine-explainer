@@ -42,18 +42,16 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
             token=HF_API_TOKEN
         )
 
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user",   "content": prompt}
-        ]
+        formatted_prompt = f"<s>[INST] {SYSTEM_PROMPT}\n\n{prompt} [/INST]"
 
-        response = client.chat_completion(
-            messages=messages,
-            max_tokens=400,
-            temperature=0.1
+        response = client.text_generation(
+            formatted_prompt,
+            max_new_tokens=400,
+            temperature=0.1,
+            do_sample=False
         )
 
-        explanation = response.choices[0].message.content
+        explanation = response
         explanation = apply_safety_filter(explanation)
 
         cache_explanation(
