@@ -3,7 +3,13 @@ from typing import Optional, List
 
 from app.core.ocr_engine import OCRResult, extract_text_with_confidence
 from app.core.medicine_extractor import ExtractedMedicine, extract_medicines
+import os
 from app.core.llm_explainer import ExplainerResult, explain_medicine
+
+# Auto-detect environment — use cloud LLM if HF token present
+_USE_CLOUD = bool(os.getenv("HF_API_TOKEN", ""))
+if _USE_CLOUD:
+    from app.core.llm_cloud import explain_medicine_cloud as explain_medicine
 from app.db.cache import log_query
 
 
