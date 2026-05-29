@@ -38,9 +38,7 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
         from huggingface_hub import InferenceClient
 
         client = InferenceClient(
-            model="HuggingFaceH4/zephyr-7b-beta",
-            token=HF_API_TOKEN,
-            provider="hf-inference"
+            token=HF_API_TOKEN
         )
 
         messages = [
@@ -49,6 +47,7 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
 
         response = client.chat_completion(
             messages=messages,
+            model="meta-llama/Llama-3.2-3B-Instruct",
             max_tokens=400,
             temperature=0.1
         )
