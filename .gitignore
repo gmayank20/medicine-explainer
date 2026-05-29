@@ -1,0 +1,32 @@
+# Virtual environment — never commit this
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment variables — contains sensitive info
+.env
+
+# Large data files — too big for GitHub
+data/indian_medicines.csv
+data/drug-ndc-0001-of-0001.json
+data/drug-ndc-0001-of-0001.json.zip
+drug-ndc-0001-of-0001.json.zip
+
+# Database — generated locally
+data/medicine_cache.db
+
+# Mac system files
+.DS_Store
+
+# Test images
+data/sample_images/*.jpg
+data/sample_images/*.png
+
+# Build files
+*.egg-info/
+dist/
+build/
