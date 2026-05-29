@@ -4,7 +4,11 @@ from app.config.prompts import SYSTEM_PROMPT, SAFETY_FOOTER, build_explanation_p
 from app.db.cache import get_cached_explanation, cache_explanation
 from app.core.llm_explainer import apply_safety_filter
 
-HF_API_TOKEN = os.getenv("HF_API_TOKEN", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_API_URL = (
+    "https://generativelanguage.googleapis.com/v1beta/models/"
+    "gemini-2.0-flash:generateContent"
+)
 
 
 @dataclass
@@ -18,10 +22,11 @@ class ExplainerResult:
 
 def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResult:
     """
-    Query HF Inference using huggingface_hub InferenceClient.
-    Works inside HF Spaces without external network calls.
+    Query Google Gemini API for medicine explanations.
+    Used when deployed on Hugging Face Spaces.
+    Free tier — no billing required.
     """
-    # Check cache first
+    # Check cache first — reduces API calls
     cached = get_cached_explanation(medicine_name)
     if cached:
         return ExplainerResult(
@@ -33,38 +38,53 @@ def explain_medicine_cloud(medicine_name: str, confidence: str) -> ExplainerResu
         )
 
     prompt = build_explanation_prompt(medicine_name, confidence)
+    full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}"
 
     try:
-        from huggingface_hub import InferenceClient
+        import requests
 
-        client = InferenceClient(
-            token=HF_API_TOKEN
-        )
+        url = f"{GEMINI_API_URL}?key={GEMINI_API_KEY}"
 
-        messages = [
-            {"role": "user", "content": f"{SYSTEM_PROMPT}\n\n{prompt}"}
-        ]
+        payload = {
+            "contents": [
+                {
+                    "parts": [
+                        {"text": full_prompt}
+                    ]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.1,
+                "maxOutputTokens": 400,
+            }
+        }
 
-        response = client.chat_completion(
-            messages=messages,
-            model="meta-llama/Llama-3.2-3B-Instruct",
-            max_tokens=400,
-            temperature=0.1
-        )
+        response = requests.post(url, json=payload, timeout=30)
 
-        explanation = response.choices[0].message.content
-        explanation = apply_safety_filter(explanation)
+        if response.status_code == 200:
+            data = response.json()
+            explanation = (
+                data["candidates"][0]["content"]["parts"][0]["text"]
+            )
+            explanation = apply_safety_filter(explanation)
 
-        cache_explanation(
-            medicine_name, explanation,
-            "mistral-7b-instruct-hf"
-        )
+            cache_explanation(
+                medicine_name, explanation, "gemini-2.0-flash"
+            )
+
+            return ExplainerResult(
+                medicine_name=medicine_name,
+                explanation=explanation,
+                was_cached=False,
+                model_used="gemini-2.0-flash",
+                safety_footer=SAFETY_FOOTER
+            )
 
         return ExplainerResult(
             medicine_name=medicine_name,
-            explanation=explanation,
+            explanation=f"Debug error: HTTP {response.status_code} — {response.text[:200]}",
             was_cached=False,
-            model_used="mistral-7b-instruct-hf",
+            model_used="error",
             safety_footer=SAFETY_FOOTER
         )
 
