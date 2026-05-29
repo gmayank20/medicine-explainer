@@ -4,12 +4,18 @@ from typing import Optional, List
 from app.core.ocr_engine import OCRResult, extract_text_with_confidence
 from app.core.medicine_extractor import ExtractedMedicine, extract_medicines
 import os
-from app.core.llm_explainer import ExplainerResult, explain_medicine
+from app.core.llm_explainer import ExplainerResult, explain_medicine as _local_explain
+from app.core.llm_cloud import explain_medicine_cloud as _cloud_explain
 
-# Auto-detect environment — use cloud LLM if HF token present
-_USE_CLOUD = bool(os.getenv("HF_API_TOKEN", ""))
-if _USE_CLOUD:
-    from app.core.llm_cloud import explain_medicine_cloud as explain_medicine
+def explain_medicine(medicine_name: str, confidence: str):
+    """
+    Auto-detect environment and use correct LLM.
+    Local: Ollama (MacBook)
+    Cloud: HF Inference API (Hugging Face Spaces)
+    """
+    if os.getenv("HF_API_TOKEN", ""):
+        return _cloud_explain(medicine_name, confidence)
+    return _local_explain(medicine_name, confidence)
 from app.db.cache import log_query
 
 
